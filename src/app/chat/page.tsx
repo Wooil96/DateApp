@@ -69,26 +69,36 @@ export default function HomePage() {
 
   const updateUserBasedEmotion = (userInput: string) => {
     setEmotion(prev => {
-      let newAffection = prev.affection;
-      let newAwkwardness = prev.awkwardness;
-      let newDisappointment = prev.disappointment;
+      let affectionDelta = 0; // 변경될 델타 값을 let으로 선언
+      let awkwardnessDelta = 0;
+      let disappointmentDelta = 0;
 
+      // 긍정적 표현
       if (userInput.includes('좋아') || userInput.includes('귀여워') || userInput.includes('고마워') || userInput.includes('최고')) {
-        newAffection = Math.min(100, prev.affection + 5);
-        newAwkwardness = Math.max(0, prev.awkwardness - 2);
-        newDisappointment = Math.max(0, prev.disappointment - 1);
-      } else if (userInput.length > 0 && userInput.length <= 3) {
-        newAwkwardness = Math.min(100, prev.awkwardness + 5);
-      } else if (userInput.includes('됐어') || userInput.includes('몰라') || userInput.includes('됐거든') || userInput.includes('싫어')) {
-        newDisappointment = Math.min(100, prev.disappointment + 7);
-        newAffection = Math.max(0, prev.affection - 3);
-        newAwkwardness = Math.min(100, prev.awkwardness + 2);
+        affectionDelta = 5;
+        awkwardnessDelta = -2;
+        disappointmentDelta = -1;
+      }
+      // 짧은/무의미한 답변
+      else if (userInput.length > 0 && userInput.length <= 3) {
+        awkwardnessDelta = 5;
+      }
+      // 부정적 표현
+      else if (userInput.includes('됐어') || userInput.includes('몰라') || userInput.includes('됐거든') || userInput.includes('싫어')) {
+        disappointmentDelta = 7;
+        affectionDelta = -3;
+        awkwardnessDelta = 2;
       }
 
+      // 최종 계산된 값을 const로 할당하거나 직접 반환
+      const finalAffection = Math.max(0, Math.min(100, prev.affection + affectionDelta));
+      const finalAwkwardness = Math.max(0, Math.min(100, prev.awkwardness + awkwardnessDelta));
+      const finalDisappointment = Math.max(0, Math.min(100, prev.disappointment + disappointmentDelta));
+
       return {
-        affection: Math.max(0, Math.min(100, newAffection)),
-        awkwardness: Math.max(0, Math.min(100, newAwkwardness)),
-        disappointment: Math.max(0, Math.min(100, newDisappointment))
+        affection: finalAffection,
+        awkwardness: finalAwkwardness,
+        disappointment: finalDisappointment
       };
     });
   };
@@ -126,15 +136,16 @@ export default function HomePage() {
       const reply = data.reply ?? 'AI 응답 오류';
       const receivedEmotionUpdate = data.emotionUpdate || { affection: 0, awkwardness: 0, disappointment: 0 };
 
+      // AI의 응답에 따른 감정 점수 업데이트 (여기서도 const 사용)
       setEmotion(prev => {
-        let newAffection = prev.affection + receivedEmotionUpdate.affection;
-        let newAwkwardness = prev.awkwardness + receivedEmotionUpdate.awkwardness;
-        let newDisappointment = prev.disappointment + receivedEmotionUpdate.disappointment;
+        const finalAffection = Math.max(0, Math.min(100, prev.affection + receivedEmotionUpdate.affection));
+        const finalAwkwardness = Math.max(0, Math.min(100, prev.awkwardness + receivedEmotionUpdate.awkwardness));
+        const finalDisappointment = Math.max(0, Math.min(100, prev.disappointment + receivedEmotionUpdate.disappointment));
 
         return {
-          affection: Math.max(0, Math.min(100, newAffection)),
-          awkwardness: Math.max(0, Math.min(100, newAwkwardness)),
-          disappointment: Math.max(0, Math.min(100, newDisappointment))
+          affection: finalAffection,
+          awkwardness: finalAwkwardness,
+          disappointment: finalDisappointment
         };
       });
 
@@ -148,9 +159,8 @@ export default function HomePage() {
     }
   };
 
-  // 감정 바의 스타일 클래스와 너비를 계산하는 함수
   const getEmotionBarClassAndWidth = (score: number, emotionType: 'affection' | 'awkwardness' | 'disappointment') => {
-    const width = Math.max(5, score); // 최소 5%는 보이도록
+    const width = Math.max(5, score);
 
     let className = '';
     switch (emotionType) {
@@ -170,7 +180,6 @@ export default function HomePage() {
   return (
     <div className={styles.container}>
       <div className={styles.chatBox}>
-        {/* 헤더 디자인 변경 */}
         <div className={styles.header}>
           <Image
             src={partnerAvatarSrc}
@@ -181,16 +190,14 @@ export default function HomePage() {
           />
           <h1 className={styles.partnerTitle}>나의 데이트 파트너</h1>
         </div>
-        {/* // 헤더 디자인 변경 끝 */}
 
-        {/* 감정 점수 시각화 UI 개선 */}
         <div className={styles.emotionDisplay}>
           {/* 친밀함 바 */}
           <div className={styles.emotionBarContainer}>
             <span className={styles.emotionIcon}>❤️‍🔥</span>
             <span className={styles.emotionLabel}>친밀함</span>
             <div className={styles.emotionBarBackground}>
-              {/* getEmotionBarClassAndWidth 함수를 한 번만 호출하여 변수에 저장 후 사용 */}
+              {/* 함수 호출 결과를 변수에 저장 후 사용 */}
               {(() => {
                 const barProps = getEmotionBarClassAndWidth(emotion.affection, "affection");
                 return (
@@ -211,7 +218,7 @@ export default function HomePage() {
             <span className={styles.emotionIcon}>😬</span>
             <span className={styles.emotionLabel}>어색함</span>
             <div className={styles.emotionBarBackground}>
-              {/* getEmotionBarClassAndWidth 함수를 한 번만 호출하여 변수에 저장 후 사용 */}
+              {/* 함수 호출 결과를 변수에 저장 후 사용 */}
               {(() => {
                 const barProps = getEmotionBarClassAndWidth(emotion.awkwardness, "awkwardness");
                 return (
@@ -232,7 +239,7 @@ export default function HomePage() {
             <span className={styles.emotionIcon}>💔</span>
             <span className={styles.emotionLabel}>서운함</span>
             <div className={styles.emotionBarBackground}>
-              {/* getEmotionBarClassAndWidth 함수를 한 번만 호출하여 변수에 저장 후 사용 */}
+              {/* 함수 호출 결과를 변수에 저장 후 사용 */}
               {(() => {
                 const barProps = getEmotionBarClassAndWidth(emotion.disappointment, "disappointment");
                 return (
@@ -248,7 +255,6 @@ export default function HomePage() {
             </span>
           </div>
         </div>
-        {/* // 감정 점수 시각화 UI 끝 */}
 
         <div className={styles.messagesContainer}>
           {messages.map((msg, idx) => (
