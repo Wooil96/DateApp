@@ -1,7 +1,7 @@
 // src/components/chat/ChatContainer.tsx
 'use client';
 
-import React, { useState, useEffect, useRef, useCallback } from 'react'; // useCallback 추가
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Image from 'next/image';
 
@@ -18,9 +18,14 @@ type EmotionScore = {
   disappointment: number;
 };
 
-const LOCAL_STORAGE_KEY = 'dateapp_chat_history';
-const INITIAL_EMOTION_KEY = 'dateapp_emotion_scores';
-const INACTIVITY_TIMEOUT_MS = 30 * 1000; // 30초 (30 * 1000 밀리초)
+const LOCAL_STORAGE_KEY_CHAT_HISTORY = 'dateapp_chat_history';
+const LOCAL_STORAGE_KEY_EMOTION_SCORES = 'dateapp_emotion_scores';
+const LOCAL_STORAGE_KEY_REMAINING_CONVERSATIONS = 'dateapp_remaining_conversations';
+const LOCAL_STORAGE_KEY_LAST_REPLENISH_TIME = 'dateapp_last_replenish_time';
+
+const INACTIVITY_TIMEOUT_MS = 30 * 1000; // 30초
+const REPLENISH_INTERVAL_MS = 5 * 60 * 1000; // 5분
+const MAX_CONVERSATIONS = 50; // 최대 대화 횟수
 
 export default function ChatContainer() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -28,14 +33,22 @@ export default function ChatContainer() {
   const [loading, setLoading] = useState(false);
   const [emotion, setEmotion] = useState<EmotionScore>(() => {
     if (typeof window !== 'undefined') {
-      const savedEmotion = localStorage.getItem(INITIAL_EMOTION_KEY);
-      return savedEmotion ? JSON.parse(savedEmotion) : { affection: 50, awkwardness: 50, disappointment: 50 };
+      const savedEmotion = localStorage.getItem(LOCAL_STORAGE_KEY_EMOTION_SCORES);
+      return savedEmotion ? JSON.parse(savedEmotion) : { affection: 50, awkwardness: 50, disappointment: 0 };
     }
-    return { affection: 50, awkwardness: 50, disappointment: 50 };
+    return { affection: 50, awkwardness: 50, disappointment: 0 };
+  });
+  const [remainingConversations, setRemainingConversations] = useState<number>(() => {
+    if (typeof window !== 'undefined') {
+      const savedCount = localStorage.getItem(LOCAL_STORAGE_KEY_REMAINING_CONVERSATIONS);
+      return savedCount ? parseInt(savedCount, 10) : MAX_CONVERSATIONS;
+    }
+    return MAX_CONVERSATIONS;
   });
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const inactivityTimerRef = useRef<NodeJS.Timeout | null>(null); // 타이머 ID를 저장할 ref
+  const inactivityTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const replenishIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   const searchParams = useSearchParams();
   const userGender = searchParams.get('user');
@@ -46,58 +59,75 @@ export default function ChatContainer() {
   const partnerAvatarAlt =
     partnerGender === 'female' ? '여자친구 아바타' : '남자친구 아바타';
 
-  // localStorage에서 메시지 로드
+  // localStorage에서 데이터 로드 (초기 마운트 시)
   useEffect(() => {
     try {
-      const savedMessages = localStorage.getItem(LOCAL_STORAGE_KEY);
+      const savedMessages = localStorage.getItem(LOCAL_STORAGE_KEY_CHAT_HISTORY);
       if (savedMessages) {
         setMessages(JSON.parse(savedMessages));
       }
+
+      const savedCount = localStorage.getItem(LOCAL_STORAGE_KEY_REMAINING_CONVERSATIONS);
+      if (savedCount) {
+        setRemainingConversations(parseInt(savedCount, 10));
+      }
+
+      const savedLastReplenishTime = localStorage.getItem(LOCAL_STORAGE_KEY_LAST_REPLENISH_TIME);
+      let lastReplenishTime = savedLastReplenishTime ? parseInt(savedLastReplenishTime, 10) : Date.now();
+
+      const now = Date.now();
+      const elapsed = now - lastReplenishTime;
+      const replenishmentsToAdd = Math.floor(elapsed / REPLENISH_INTERVAL_MS);
+
+      if (replenishmentsToAdd > 0) {
+        setRemainingConversations(prev => Math.min(MAX_CONVERSATIONS, prev + replenishmentsToAdd * 10));
+        lastReplenishTime = now;
+      }
+      localStorage.setItem(LOCAL_STORAGE_KEY_LAST_REPLENISH_TIME, lastReplenishTime.toString());
+
     } catch (error) {
-      console.error("Failed to load chat history from localStorage:", error);
+      console.error("Failed to load initial data from localStorage:", error);
     }
   }, []);
 
-  // 메시지나 감정 상태 변경 시 localStorage 저장 및 자동 스크롤
+  // 메시지, 감정, 남은 횟수 상태 변경 시 localStorage 저장 및 자동 스크롤
   useEffect(() => {
     try {
-      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(messages));
-      localStorage.setItem(INITIAL_EMOTION_KEY, JSON.stringify(emotion));
+      localStorage.setItem(LOCAL_STORAGE_KEY_CHAT_HISTORY, JSON.stringify(messages));
+      localStorage.setItem(LOCAL_STORAGE_KEY_EMOTION_SCORES, JSON.stringify(emotion));
+      localStorage.setItem(LOCAL_STORAGE_KEY_REMAINING_CONVERSATIONS, remainingConversations.toString());
     } catch (error) {
       console.error("Failed to save data to localStorage:", error);
     }
     if (messagesEndRef.current) {
       messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
     }
-  }, [messages, emotion]);
+  }, [messages, emotion, remainingConversations]);
 
-  // 비활성 타이머를 관리하는 함수
-  const resetInactivityTimer = useCallback(() => {
-    if (inactivityTimerRef.current) {
-      clearTimeout(inactivityTimerRef.current);
-    }
-    // 봇이 마지막으로 말하고 로딩이 완료된 상태에서만 타이머 시작
-    if (!loading && messages.length > 0 && messages[messages.length - 1].sender === 'bot') {
-      inactivityTimerRef.current = setTimeout(() => {
-        sendProactiveMessage(); // 일정 시간 후 선제적 메시지 전송
-      }, INACTIVITY_TIMEOUT_MS);
-    }
-  }, [loading, messages]); // loading 또는 messages가 변할 때마다 함수 재생성
 
-  // 컴포넌트 마운트/업데이트 시 타이머 관리
+  // 5분마다 대화 횟수 충전 로직 (기존과 동일)
   useEffect(() => {
-    resetInactivityTimer();
+    if (replenishIntervalRef.current) {
+      clearInterval(replenishIntervalRef.current);
+    }
 
-    // 컴포넌트 언마운트 시 타이머 정리
+    replenishIntervalRef.current = setInterval(() => {
+      setRemainingConversations(prev => {
+        const newCount = Math.min(MAX_CONVERSATIONS, prev + 10);
+        localStorage.setItem(LOCAL_STORAGE_KEY_LAST_REPLENISH_TIME, Date.now().toString());
+        return newCount;
+      });
+    }, REPLENISH_INTERVAL_MS);
+
     return () => {
-      if (inactivityTimerRef.current) {
-        clearTimeout(inactivityTimerRef.current);
+      if (replenishIntervalRef.current) {
+        clearInterval(replenishIntervalRef.current);
       }
     };
-  }, [resetInactivityTimer]); // resetInactivityTimer 함수가 변할 때 실행
+  }, []);
 
-  // 사용자 입력에 따른 감정 점수 업데이트 로직
-  const updateUserBasedEmotion = (userInput: string) => {
+
+  const updateUserBasedEmotion = useCallback((userInput: string) => { // useCallback 추가
     setEmotion(prev => {
       let affectionDelta = 0;
       let awkwardnessDelta = 0;
@@ -125,13 +155,90 @@ export default function ChatContainer() {
         disappointment: finalDisappointment
       };
     });
-  };
+  }, []); // 의존성 없음
 
-  // 일반 메시지 전송 함수
+
+  // ** sendProactiveMessage 함수를 먼저 선언하고 useCallback으로 감쌉니다. **
+  const sendProactiveMessage = useCallback(async () => {
+    if (loading) return;
+
+    if (remainingConversations <= 0) {
+      console.log("Not sending proactive message: daily limit reached.");
+      return;
+    }
+    setRemainingConversations(prev => prev - 1);
+
+    console.log("Sending proactive message...");
+    setLoading(true);
+
+    try {
+      const messagesForApi = messages.map(msg => ({
+        role: msg.sender === 'user' ? 'user' : 'assistant',
+        content: msg.text,
+      }));
+
+      const proactiveTriggerMessage: ChatMessage = { sender: 'user', text: "사용자가 일정 시간 동안 반응이 없습니다. 대화를 이끌어주세요." };
+      const updatedMessagesForApi = [...messagesForApi, { role: 'user', content: proactiveTriggerMessage.text }];
+
+      const res = await fetch('/api/chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          messages: updatedMessagesForApi,
+          userGender,
+          partnerGender,
+          emotion
+        })
+      });
+
+      const data = await res.json();
+      const reply = data.reply ?? 'AI 응답 오류';
+      const receivedEmotionUpdate = data.emotionUpdate || { affection: 0, awkwardness: 0, disappointment: 0 };
+
+      setEmotion(prev => {
+        const finalAffection = Math.max(0, Math.min(100, prev.affection + receivedEmotionUpdate.affection));
+        const finalAwkwardness = Math.max(0, Math.min(100, prev.awkwardness + receivedEmotionUpdate.awkwardness));
+        const finalDisappointment = Math.max(0, Math.min(100, prev.disappointment + receivedEmotionUpdate.disappointment));
+
+        return {
+          affection: finalAffection,
+          awkwardness: finalAwkwardness,
+          disappointment: finalDisappointment
+        };
+      });
+      setMessages(prevMessages => [...prevMessages, { sender: 'bot', text: reply }]);
+    } catch (err) {
+      console.error("Proactive chat API error:", err);
+      setMessages(prevMessages => [...prevMessages, { sender: 'bot', text: '선제적 메시지 전송 중 에러가 발생했습니다.' }]);
+    } finally {
+      setLoading(false);
+    }
+  }, [loading, messages, remainingConversations, userGender, partnerGender, emotion]); // 필요한 의존성 추가
+
+  // resetInactivityTimer 함수를 sendProactiveMessage 뒤에 선언하고 useCallback으로 감쌉니다.
+  const resetInactivityTimer = useCallback(() => {
+    if (inactivityTimerRef.current) {
+      clearTimeout(inactivityTimerRef.current);
+    }
+    if (!loading && messages.length > 0 && messages[messages.length - 1].sender === 'bot') {
+      inactivityTimerRef.current = setTimeout(() => {
+        sendProactiveMessage(); // 이제 sendProactiveMessage가 정의되어 있습니다.
+      }, INACTIVITY_TIMEOUT_MS);
+    }
+  }, [loading, messages, sendProactiveMessage]);
+
+
   const sendMessage = async () => {
+    if (remainingConversations <= 0) {
+      alert("오늘 대화 횟수를 모두 사용했습니다. 5분마다 10회씩 충전됩니다.");
+      return;
+    }
+
     if (!input.trim()) return;
 
-    resetInactivityTimer(); // 사용자 메시지 보낼 때 타이머 초기화
+    resetInactivityTimer();
 
     const newUserMessage: ChatMessage = { sender: 'user', text: input };
     const updatedMessages = [...messages, newUserMessage];
@@ -139,6 +246,7 @@ export default function ChatContainer() {
 
     setLoading(true);
     updateUserBasedEmotion(input);
+    setRemainingConversations(prev => prev - 1);
 
     try {
       const messagesForApi = updatedMessages.map(msg => ({
@@ -182,64 +290,6 @@ export default function ChatContainer() {
     } finally {
       setInput('');
       setLoading(false);
-      // AI 응답 후 타이머 다시 시작
-      // resetInactivityTimer(); // 이 부분은 useEffect에서 messages 변경 감지로 처리됨
-    }
-  };
-
-  // 선제적 메시지 전송 함수
-  const sendProactiveMessage = async () => {
-    if (loading) return; // 이미 로딩 중이면 보내지 않음
-
-    console.log("Sending proactive message...");
-    setLoading(true);
-
-    try {
-      const messagesForApi = messages.map(msg => ({ // 현재까지의 모든 메시지 전달
-        role: msg.sender === 'user' ? 'user' : 'assistant',
-        content: msg.text,
-      }));
-
-      // AI에게 선제적 메시지임을 알리는 특수 메시지 추가 (프롬프트에서 해석)
-      const proactiveTriggerMessage: ChatMessage = { sender: 'user', text: "사용자가 일정 시간 동안 반응이 없습니다. 대화를 이끌어주세요." };
-      const updatedMessagesForApi = [...messagesForApi, { role: 'user', content: proactiveTriggerMessage.text }];
-
-
-      const res = await fetch('/api/chat', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          messages: updatedMessagesForApi, // 선제적 메시지 요청을 포함한 메시지 기록
-          userGender,
-          partnerGender,
-          emotion
-        })
-      });
-
-      const data = await res.json();
-      const reply = data.reply ?? 'AI 응답 오류';
-      const receivedEmotionUpdate = data.emotionUpdate || { affection: 0, awkwardness: 0, disappointment: 0 };
-
-      setEmotion(prev => {
-        const finalAffection = Math.max(0, Math.min(100, prev.affection + receivedEmotionUpdate.affection));
-        const finalAwkwardness = Math.max(0, Math.min(100, prev.awkwardness + receivedEmotionUpdate.awkwardness));
-        const finalDisappointment = Math.max(0, Math.min(100, prev.disappointment + receivedEmotionUpdate.disappointment));
-
-        return {
-          affection: finalAffection,
-          awkwardness: finalAwkwardness,
-          disappointment: finalDisappointment
-        };
-      });
-      setMessages(prevMessages => [...prevMessages, { sender: 'bot', text: reply }]);
-    } catch (err) {
-      console.error("Proactive chat API error:", err);
-      setMessages(prevMessages => [...prevMessages, { sender: 'bot', text: '선제적 메시지 전송 중 에러가 발생했습니다.' }]);
-    } finally {
-      setLoading(false);
-      // AI 응답 후 타이머 재설정은 useEffect에서 messages 변경 감지로 처리됨
     }
   };
 
@@ -274,6 +324,10 @@ export default function ChatContainer() {
             className={styles.partnerAvatar}
           />
           <h1 className={styles.partnerTitle}>나의 데이트 파트너</h1>
+        </div>
+
+        <div className={styles.conversationCounter}>
+          남은 대화 횟수: <span className={styles.countNumber}>{remainingConversations}</span>회
         </div>
 
         <div className={styles.emotionDisplay}>

@@ -15,7 +15,6 @@
   font-family: 'Inter', sans-serif; /* 폰트 지정 (프로젝트에 Inter 폰트가 설정되어 있다고 가정) */
   box-sizing: border-box; /* padding이 전체 높이를 벗어나지 않도록 */
 }
-
 .chatBox {
   background-color: white;
   border-radius: 1.5rem; /* 더 둥글게 */
@@ -27,14 +26,13 @@
   flex-direction: column; /* 헤더, 메시지, 입력창을 수직으로 정렬 */
   overflow: hidden; /* 내부 요소가 넘칠 경우 숨김 (메시지 컨테이너에서 스크롤) */
 }
-
 /* --- 헤더 스타일 변경 --- */
 .header {
   display: flex; /* Flexbox 사용하여 아바타와 타이틀을 가로로 정렬 */
   align-items: center; /* 세로 중앙 정렬 */
   justify-content: center; /* 가로 중앙 정렬 (내부 요소들을 가운데로) */
-  gap: 1rem; /* 아바타와 타이틀 사이 간격 */
-
+  gap: 1rem;
+  /* 아바타와 타이틀 사이 간격 */
   padding: 1rem 1.5rem; /* 패딩 조정 */
   border-bottom: 1px solid #eee;
   background-color: #fff;
@@ -42,14 +40,12 @@
   border-top-right-radius: 1.5rem;
   flex-shrink: 0; /* 헤더는 크기가 줄어들지 않도록 고정 */
 }
-
 .partnerAvatar {
   border-radius: 50%; /* 원형 아바타 */
   object-fit: cover; /* 이미지가 잘리지 않도록 */
   border: 2px solid #fca5a5; /* 파트너 색상 테두리 (여자친구 색상에서 가져옴) */
   box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
 }
-
 .partnerTitle {
   font-size: 1.8rem; /* 타이틀 크기 조정 */
   font-weight: 700; /* 폰트 굵기 조정 */
@@ -57,14 +53,12 @@
   margin: 0; /* h1 기본 마진 제거 */
   line-height: 1.2; /* 줄 간격 조정 */
 }
-
 /* 선택 사항: 온라인 상태 표시 스타일 (현재 HTML에는 미적용) */
 .onlineStatus {
   font-size: 0.9rem;
   color: #4caf50; /* 초록색 */
   margin-left: 0.5rem;
 }
-
 /* --- 감정 시각화 UI 스타일 --- */
 .emotionDisplay {
   padding: 1rem 1.5rem;
@@ -76,7 +70,6 @@
   flex-shrink: 0; /* 감정표시 UI도 고정 */
   box-shadow: inset 0 -2px 5px rgba(0, 0, 0, 0.05); /* 미묘한 내부 그림자 */
 }
-
 .emotionBarContainer {
   display: flex;
   align-items: center;
@@ -85,19 +78,17 @@
   font-weight: 500;
   color: #333;
 }
-
 .emotionIcon {
-  font-size: 1.5rem; /* 아이콘 크기 */
+  font-size: 1.5rem;
+  /* 아이콘 크기 */
   line-height: 1; /* 줄 간격 맞춤 */
 }
-
 .emotionLabel {
   width: 70px; /* 라벨 너비 고정 */
   text-align: left; /* 왼쪽 정렬 */
   font-weight: 600;
   color: #555;
 }
-
 .emotionBarBackground {
   flex-grow: 1;
   height: 12px; /* 바 높이 증가 */
@@ -107,7 +98,6 @@
   position: relative; /* 그림자 효과를 위해 */
   box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.1); /* 바에 입체감 */
 }
-
 .emotionBarFill {
   height: 100%;
   border-radius: 6px;
@@ -118,14 +108,13 @@
     var(--end-color)
   ); /* 그라데이션 */
 }
-
 .emotionScore {
   width: 40px; /* 점수 표시 너비 */
   text-align: right;
-  font-weight: 700; /* 더 굵게 */
+  font-weight: 700;
+  /* 더 굵게 */
   color: #4a4a4a;
 }
-
 /* 감정 바별 색상 변수 */
 .emotionBarFill.affection {
   --start-color: #8bc34a; /* Light Green */
@@ -139,7 +128,6 @@
   --start-color: #ef5350; /* Red */
   --end-color: #d32f2f; /* Dark Red */
 }
-
 /* --- 메시지 컨테이너 및 버블 스타일 --- */
 .messagesContainer {
   flex-grow: 1; /* 남은 공간을 모두 차지하도록 확장 */
@@ -149,7 +137,6 @@
   flex-direction: column;
   gap: 0.75rem; /* 메시지 간 간격 */
 }
-
 .messagesContainer::-webkit-scrollbar {
   width: 8px;
 }
@@ -158,12 +145,10 @@
   background: #f1f1f1;
   border-radius: 10px;
 }
-
 .messagesContainer::-webkit-scrollbar-thumb {
   background: #888;
   border-radius: 10px;
 }
-
 .messagesContainer::-webkit-scrollbar-thumb:hover {
   background: #555;
 }
@@ -172,7 +157,6 @@
   display: flex;
   /* userMessage와 botMessage에서 justify-content를 사용하여 정렬 */
 }
-
 .messageBubble {
   max-width: 75%; /* 메시지 버블 최대 너비 */
   padding: 0.75rem 1.25rem;
@@ -181,7 +165,6 @@
   box-shadow: 0 2px 5px rgba(0, 0, 0, 0.08); /* 그림자 추가 */
   line-height: 1.5; /* 줄 간격 */
 }
-
 /* 사용자 메시지 */
 .userMessageWrapper {
   justify-content: flex-end; /* 오른쪽 정렬 */
@@ -191,7 +174,6 @@
   color: white;
   border-bottom-right-radius: 0.5rem; /* 아래 오른쪽 모서리 덜 둥글게 */
 }
-
 /* 봇 메시지 */
 .botMessageWrapper {
   justify-content: flex-start; /* 왼쪽 정렬 */
@@ -201,14 +183,12 @@
   color: white;
   border-bottom-left-radius: 0.5rem; /* 아래 왼쪽 모서리 덜 둥글게 */
 }
-
 .loadingMessage {
   color: #6b7280; /* 회색 */
   margin-right: auto; /* 왼쪽 정렬 */
   padding: 0.75rem 1.25rem;
   font-style: italic;
 }
-
 /* --- 입력 영역 스타일 --- */
 .inputArea {
   display: flex;
@@ -220,7 +200,6 @@
   border-bottom-right-radius: 1.5rem;
   flex-shrink: 0;
 }
-
 .textInput {
   flex: 1;
   padding: 0.75rem 1.25rem;
@@ -230,12 +209,10 @@
   outline: none; /* 포커스 시 기본 아웃라인 제거 */
   transition: border-color 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
 }
-
 .textInput:focus {
   border-color: #60a5fa; /* 포커스 시 파란색 테두리 */
   box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.3); /* 포커스 시 그림자 */
 }
-
 .sendButton {
   padding: 0.75rem 1.5rem;
   border-radius: 1.5rem;
@@ -246,13 +223,28 @@
   cursor: pointer;
   transition: background-color 0.2s ease-in-out, transform 0.2s ease-in-out;
 }
-
 .sendButton:hover:not(:disabled) {
   background-color: #dc2626; /* 호버 시 더 진한 빨강 */
   transform: translateY(-2px); /* 호버 시 살짝 위로 */
 }
-
 .sendButton:disabled {
   background-color: #d1d5db; /* 비활성화 시 회색 */
   cursor: not-allowed;
+}
+.conversationCounter {
+  padding: 0.75rem 1.5rem;
+
+  background-color: #f0f4f8;
+  /* 배경색 */
+  border-bottom: 1px solid #e0e0e0;
+  text-align: center;
+  font-size: 0.95rem;
+  color: #606060;
+  font-weight: 500;
+  flex-shrink: 0;
+}
+.countNumber {
+  font-weight: 700;
+  color: #3b82f6; /* 파란색으로 강조 */
+  font-size: 1.1rem;
 }
