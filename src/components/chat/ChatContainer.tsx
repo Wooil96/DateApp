@@ -1,11 +1,11 @@
 // src/components/chat/ChatContainer.tsx
-'use client'; // 이 파일이 클라이언트 컴포넌트임을 명시
+'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
-import { useSearchParams } from 'next/navigation'; // 여기에 useSearchParams가 있게 됨
+import React, { useState, useEffect, useRef, useCallback } from 'react'; // useCallback 추가
+import { useSearchParams } from 'next/navigation';
 import Image from 'next/image';
 
-import styles from '../../app/chat/chat.module.css'; // CSS Modules 경로 조정
+import styles from '../../app/chat/chat.module.css';
 
 type ChatMessage = {
   sender: 'user' | 'bot';
@@ -20,8 +20,9 @@ type EmotionScore = {
 
 const LOCAL_STORAGE_KEY = 'dateapp_chat_history';
 const INITIAL_EMOTION_KEY = 'dateapp_emotion_scores';
+const INACTIVITY_TIMEOUT_MS = 30 * 1000; // 30초 (30 * 1000 밀리초)
 
-export default function ChatContainer() { // 컴포넌트 이름 변경
+export default function ChatContainer() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
@@ -34,6 +35,7 @@ export default function ChatContainer() { // 컴포넌트 이름 변경
   });
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const inactivityTimerRef = useRef<NodeJS.Timeout | null>(null); // 타이머 ID를 저장할 ref
 
   const searchParams = useSearchParams();
   const userGender = searchParams.get('user');
@@ -44,6 +46,7 @@ export default function ChatContainer() { // 컴포넌트 이름 변경
   const partnerAvatarAlt =
     partnerGender === 'female' ? '여자친구 아바타' : '남자친구 아바타';
 
+  // localStorage에서 메시지 로드
   useEffect(() => {
     try {
       const savedMessages = localStorage.getItem(LOCAL_STORAGE_KEY);
@@ -55,6 +58,7 @@ export default function ChatContainer() { // 컴포넌트 이름 변경
     }
   }, []);
 
+  // 메시지나 감정 상태 변경 시 localStorage 저장 및 자동 스크롤
   useEffect(() => {
     try {
       localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(messages));
@@ -67,6 +71,32 @@ export default function ChatContainer() { // 컴포넌트 이름 변경
     }
   }, [messages, emotion]);
 
+  // 비활성 타이머를 관리하는 함수
+  const resetInactivityTimer = useCallback(() => {
+    if (inactivityTimerRef.current) {
+      clearTimeout(inactivityTimerRef.current);
+    }
+    // 봇이 마지막으로 말하고 로딩이 완료된 상태에서만 타이머 시작
+    if (!loading && messages.length > 0 && messages[messages.length - 1].sender === 'bot') {
+      inactivityTimerRef.current = setTimeout(() => {
+        sendProactiveMessage(); // 일정 시간 후 선제적 메시지 전송
+      }, INACTIVITY_TIMEOUT_MS);
+    }
+  }, [loading, messages]); // loading 또는 messages가 변할 때마다 함수 재생성
+
+  // 컴포넌트 마운트/업데이트 시 타이머 관리
+  useEffect(() => {
+    resetInactivityTimer();
+
+    // 컴포넌트 언마운트 시 타이머 정리
+    return () => {
+      if (inactivityTimerRef.current) {
+        clearTimeout(inactivityTimerRef.current);
+      }
+    };
+  }, [resetInactivityTimer]); // resetInactivityTimer 함수가 변할 때 실행
+
+  // 사용자 입력에 따른 감정 점수 업데이트 로직
   const updateUserBasedEmotion = (userInput: string) => {
     setEmotion(prev => {
       let affectionDelta = 0;
@@ -97,8 +127,11 @@ export default function ChatContainer() { // 컴포넌트 이름 변경
     });
   };
 
+  // 일반 메시지 전송 함수
   const sendMessage = async () => {
     if (!input.trim()) return;
+
+    resetInactivityTimer(); // 사용자 메시지 보낼 때 타이머 초기화
 
     const newUserMessage: ChatMessage = { sender: 'user', text: input };
     const updatedMessages = [...messages, newUserMessage];
@@ -149,8 +182,67 @@ export default function ChatContainer() { // 컴포넌트 이름 변경
     } finally {
       setInput('');
       setLoading(false);
+      // AI 응답 후 타이머 다시 시작
+      // resetInactivityTimer(); // 이 부분은 useEffect에서 messages 변경 감지로 처리됨
     }
   };
+
+  // 선제적 메시지 전송 함수
+  const sendProactiveMessage = async () => {
+    if (loading) return; // 이미 로딩 중이면 보내지 않음
+
+    console.log("Sending proactive message...");
+    setLoading(true);
+
+    try {
+      const messagesForApi = messages.map(msg => ({ // 현재까지의 모든 메시지 전달
+        role: msg.sender === 'user' ? 'user' : 'assistant',
+        content: msg.text,
+      }));
+
+      // AI에게 선제적 메시지임을 알리는 특수 메시지 추가 (프롬프트에서 해석)
+      const proactiveTriggerMessage: ChatMessage = { sender: 'user', text: "사용자가 일정 시간 동안 반응이 없습니다. 대화를 이끌어주세요." };
+      const updatedMessagesForApi = [...messagesForApi, { role: 'user', content: proactiveTriggerMessage.text }];
+
+
+      const res = await fetch('/api/chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          messages: updatedMessagesForApi, // 선제적 메시지 요청을 포함한 메시지 기록
+          userGender,
+          partnerGender,
+          emotion
+        })
+      });
+
+      const data = await res.json();
+      const reply = data.reply ?? 'AI 응답 오류';
+      const receivedEmotionUpdate = data.emotionUpdate || { affection: 0, awkwardness: 0, disappointment: 0 };
+
+      setEmotion(prev => {
+        const finalAffection = Math.max(0, Math.min(100, prev.affection + receivedEmotionUpdate.affection));
+        const finalAwkwardness = Math.max(0, Math.min(100, prev.awkwardness + receivedEmotionUpdate.awkwardness));
+        const finalDisappointment = Math.max(0, Math.min(100, prev.disappointment + receivedEmotionUpdate.disappointment));
+
+        return {
+          affection: finalAffection,
+          awkwardness: finalAwkwardness,
+          disappointment: finalDisappointment
+        };
+      });
+      setMessages(prevMessages => [...prevMessages, { sender: 'bot', text: reply }]);
+    } catch (err) {
+      console.error("Proactive chat API error:", err);
+      setMessages(prevMessages => [...prevMessages, { sender: 'bot', text: '선제적 메시지 전송 중 에러가 발생했습니다.' }]);
+    } finally {
+      setLoading(false);
+      // AI 응답 후 타이머 재설정은 useEffect에서 messages 변경 감지로 처리됨
+    }
+  };
+
 
   const getEmotionBarClassAndWidth = (score: number, emotionType: 'affection' | 'awkwardness' | 'disappointment') => {
     const width = Math.max(5, score);
